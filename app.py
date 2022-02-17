@@ -1,21 +1,28 @@
-from flask import Flask, send_file, send_from_directory, Blueprint, request
+from flask import Flask, send_file, send_from_directory, Blueprint, request, render_template
+from pymongo import MongoClient
+import os
 import json
 
-@html.route('/')
-    def index():
-        return html.send_static_file("index.html")
+app = Flask(__name__)
 
-@html.route('/textbox', methods=(["get"]))
-    def textbox():
-        text = request.args.get("text")
-        with open('db.txt') as f:
-            f.writelines(text)
-        return json.dumps({'status'; 'sucess'})
+@app.route('/')
+def home():
+    return render_template('index.html')
 
-@html.route('/printfile', methods=(['post']))
-    def printfile():
-        jstring = {}
-        with open('db.txt') as f:
-            jstring['text'] = f.read()
-        return json.dumps(jstring)
- 
+@app.route('/textbox', methods=(["post"]))
+def textbox():
+    text = request.form['textq']
+    with open('db.txt', 'w') as f: # This is going to be changed to database
+        f.write(str(text))
+    return render_template('index.html')
+
+@app.route('/printfile', methods=(['post']))
+def printfile():
+    jstring = {}
+    with open('db.txt') as f: #This is going to be changed to data base
+        jstring['text'] = f.read()
+    return json.dumps(jstring)
+
+if __name__ == "__main__":
+    port = int(os.environ.get('PORT', 5000))
+    app.run(debug=True, host='0.0.0.0', port=port)
