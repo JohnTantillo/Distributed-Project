@@ -17,7 +17,6 @@ def textbox():
         return send_from_directory(app.static_folder, 'index.html')
     with open('db.txt', 'a') as f: # This is going to be changed to database
         f.write(str(text) + "\n")
-    f.close()
     return send_from_directory(app.static_folder, 'index.html')
 
 @app.route('/printfile', methods=(['post']))
@@ -25,7 +24,6 @@ def printfile():
     jstring = {}
     with open('db.txt') as f: #This is going to be changed to data base
         jstring['text'] = f.read().split('\n')
-    f.close()
     return render_template('index2.html', data=jstring['text'])
 
 if __name__ == "__main__":
