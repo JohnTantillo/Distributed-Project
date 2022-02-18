@@ -6,20 +6,19 @@ function App() {
 
   return (
     <div>
-    <form>
+    <form action="http://localhost:5000/textbox" method="post">
         <input
-          method="post"
-          type='text'
-          placeholder="Write text here"
+          type="text"
+          name="writer"
+          placeholder="Enter a game title"
           maxLength='100'
           onChange={e => setText(e.target.value)}
         />
-        <button type='submit'>Write</button>
+      <button type='submit'>Write</button>
       </form>
-
-      <button>
-        Show written text
-      </button>
+      <form action="http://localhost:5000/printfile" method="post">
+        <button>Show written text</button>
+      </form>
     </div>
   );
 }
