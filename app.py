@@ -1,10 +1,10 @@
+# Author: John Tantillo
 from flask import Flask, send_file, send_from_directory, Blueprint, request, render_template
 from pymongo import MongoClient
 import os
 import json
 
 app = Flask(__name__, static_url_path='', static_folder='frontend/build')
-# html = Blueprint(r'html', __name__, static_folder="frontend/build/", static_url_path="/")
 
 @app.route('/')
 def home():
