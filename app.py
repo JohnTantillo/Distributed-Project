@@ -1,4 +1,7 @@
 # Author: John Tantillo
+# To run: In one terminal run "npm run build" then "npm start"
+# In another run "docker build -t project ." then "docker run -dp 5000:5000 project"
+# After this, navigate to localhost:5000
 from flask import Flask, send_file, send_from_directory, Blueprint, request, render_template
 from pymongo import MongoClient
 import os
