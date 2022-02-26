@@ -2,14 +2,15 @@
 # To run: In one terminal run "npm run build" then "npm start". Make sure you are located in the /frontend directory
 # In another terminal in the same level as the Dockerfile run "docker build -t project ." then "docker run -dp 5000:5000 project"
 # After this, navigate to localhost:5000
+# For phase 2 run "docker compose up -d --scale app=3" to run 3 containers of this server
 from flask import Flask, send_file, send_from_directory, Blueprint, request, render_template
 import pymongo
 import os
 import json
 
 app = Flask(__name__, static_url_path='', static_folder='frontend/build')
-client = pymongo.MongoClient("mongodb+srv://486mongo:password@cluster0.8ym8n.mongodb.net/myFirstDatabase?retryWrites=true&w=majority")
-#client = pymongo.MongoClient('localhost')
+client = pymongo.MongoClient("mongodb+srv://486mongo:password@cluster0.8ym8n.mongodb.net/myFirstDatabase?retryWrites=true&w=majority", connect=False)
+test = client.test
 db = client['486db']
 col = db['games']
 

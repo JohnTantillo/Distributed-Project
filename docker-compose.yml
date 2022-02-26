@@ -2,9 +2,14 @@ version: '3.7'
 services:
   mongo:
     image: mongo:4.2.5
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: 486mongo
+      MONGO_INITDB_ROOT_PASSWORD: password
+    ports:
+      - 27017:27017
   app:
     build: .
     environment:
       WAIT_HOSTS: mongo:27017
     ports:
-      - '5000:5000'
+      - "5000"
