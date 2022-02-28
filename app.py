@@ -7,10 +7,11 @@ from flask import Flask, send_file, send_from_directory, Blueprint, request, ren
 import pymongo
 import os
 import json
+import socket
 
 app = Flask(__name__, static_url_path='', static_folder='frontend/build')
-client = pymongo.MongoClient("mongodb+srv://486mongo:password@cluster0.8ym8n.mongodb.net/myFirstDatabase?retryWrites=true&w=majority", connect=False)
-test = client.test
+client = pymongo.MongoClient("mongodb://mongo:27017")
+client.test
 db = client['486db']
 col = db['games']
 
@@ -23,7 +24,7 @@ def textbox():
     text = request.form['writer']
     if text == "":
         return send_from_directory(app.static_folder, 'index.html')
-    inserted = col.insert_one({"game": text})
+    col.insert_one({"game": text})
     return send_from_directory(app.static_folder, 'index.html')
 
 @app.route('/printfile', methods=(['post']))

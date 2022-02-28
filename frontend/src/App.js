@@ -6,7 +6,7 @@ function App() {
 
   return (
     <div>
-    <form action="http://localhost:5000/textbox" method="post">
+    <form action="/textbox" method="post">
         <input
           type="text"
           name="writer"
@@ -16,7 +16,7 @@ function App() {
         />
       <button type='submit'>Write</button>
       </form>
-      <form action="http://localhost:5000/printfile" method="post">
+      <form action="/printfile" method="post">
         <button>Show written text</button>
       </form>
     </div>
