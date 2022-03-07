@@ -41,6 +41,7 @@ def textbox():
     ack3 = json.loads(requests.post('http://node2:5000/acknowledge').text)['ack']
     if ack3:
         node3_db.insert_one({"game": text})
+    #leader_db.insert_one({"game": text})
     return send_from_directory(app.static_folder, 'index.html')
 
 @app.route('/printfile', methods=(['post']))
