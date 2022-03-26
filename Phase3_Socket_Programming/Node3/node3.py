@@ -3,49 +3,59 @@ import time
 import threading
 import json
 import traceback
-timeout = 3
+import random
+
+Timeout = random.uniform(.25, .35)
+currentTerm = 0
+votedFor = ""
+Log = []
+Heartbeat = .1
+isLeader = False
+name = "Node3"
+nodes = ["Node1", "Node2"]
+currentLeader = ""
+state = "follower"
+
 # Listener
 def listener(skt):
     print(f"Starting Listener ")
+    start_time = 0
     while True:
+        print("here")
+        stop_time = time.perf_counter()
+        if start_time != 0 and stop_time - start_time > Timeout:
+            print("TIMEOUT!!!")
         try:
             msg, addr = skt.recvfrom(1024)
         except:
             print(f"ERROR while fetching from socket : {traceback.print_exc()}")
-
         # Decoding the Message received from Node 1
         decoded_msg = json.loads(msg.decode('utf-8'))
         print(f"Message Received : {decoded_msg} From : {addr}")
-        # if decoded_msg['prevLogIndex'] == -1:
-        #     start_time = time.perf_counter()
-        # stop_time = time.perf_counter()
-        # print(str(stop_time-start_time))
-        # if stop_time - start_time > timeout:
-        #     print("TIMEOUT!!!")
-
-        # if decoded_msg['counter'] >= 4:
-        #     break
-
-    print("Exiting Listener Function")
+        if decoded_msg['prevLogIndex'] == -1:
+            start_time = time.perf_counter()
+        stop_time = time.perf_counter()
+        print(str(stop_time-start_time))
+       
 
 def heartbeat(skt):
-    target = "Node2"
-    append_rpc = {"leaderId": f"Node3", "Entries":[], "prevLogIndex":0, "prevLogTerm":-1}
+    append_rpc = {"leaderId": f"Node3", "Entries":[], "prevLogIndex":-1, "prevLogTerm":-1}
     while True:
-        time.sleep(5)
-        skt.sendto(json.dumps(append_rpc).encode(), (target, 5555))
-        print("sent")
+        if isLeader:
+            time.sleep(Heartbeat)
+            for node in nodes:
+                skt.sendto(json.dumps(append_rpc).encode(), (node, 5555))
+                print("sent to " + node)
 
 if __name__ == "__main__":
     print(f"Starting Node 2")
-
-    sender = "Node3"
 
     # Creating Socket and binding it to the target container IP and port
     UDP_Socket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
 
     # Bind the node to sender ip and port
-    UDP_Socket.bind((sender, 5555))
+    UDP_Socket.bind((name, 5555))
+    UDP_Socket.settimeout(Timeout)
 
     #Starting thread 1
     threading.Thread(target=listener, args=[UDP_Socket]).start()
