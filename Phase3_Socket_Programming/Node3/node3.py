@@ -21,13 +21,12 @@ def listener(skt):
     print(f"Starting Listener ")
     start_time = 0
     while True:
-        print("here")
-        stop_time = time.perf_counter()
-        if start_time != 0 and stop_time - start_time > Timeout:
-            print("TIMEOUT!!!")
         try:
             msg, addr = skt.recvfrom(1024)
         except:
+            stop_time = time.perf_counter()
+            if start_time != 0 and stop_time - start_time > Timeout:
+                print("TIMEOUT!!!")
             print(f"ERROR while fetching from socket : {traceback.print_exc()}")
         # Decoding the Message received from Node 1
         decoded_msg = json.loads(msg.decode('utf-8'))

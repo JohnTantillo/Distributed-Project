@@ -7,10 +7,14 @@
 version: "3.7"
 services:
    node1:
+     environment: 
+       - NAME=Node1
      container_name: Node1
      build: Node/.
 
    node2:
+     environment: 
+       - NAME=Node2
      container_name: Node2
      build: Node/.
 
