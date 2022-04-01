@@ -36,7 +36,7 @@ def start_election(skt):
         votes = 1
     currentTerm += 1
     print('voting for myself')
-    time.sleep(1)
+    time.sleep(Timeout)
     if state == 'candidate' and votes >= 3:
         state = 'leader'
         threading.Thread(target=heartbeat, args=[UDP_Socket]).start()
