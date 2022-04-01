@@ -7,13 +7,13 @@ import random
 import os
 
 # Global information that will be stored in a volume
-Timeout = random.uniform(.25, .35)
+Timeout = random.uniform(.25, .4)
 currentTerm = 0
 voted = False
 Log = []
 Heartbeat = .1
 name = os.environ['NAME']
-nodes = ["Node1", "Node2", 'Node3']
+nodes = ["Node1", "Node2", 'Node3', 'Node4', 'Node5']
 state = "follower"
 beat_time = 0
 votes = 0
@@ -23,24 +23,31 @@ def start_election(skt):
     global votes
     global currentTerm
     global voted
-    voted = True
-    votes = 1
-    currentTerm += 1
+    global Timeout
     requestVote_rpc = {'Term': currentTerm, 'candidateId': name, 'lastLogIndex': -1, 'lastLogTerm': 0}
     for node in nodes:
         if node != name:
-            skt.sendto(json.dumps(requestVote_rpc).encode(), (node, 5555))
-            print("sent to " + node)
-    while votes < 2 and state == 'candidate':
-        temp = 1
-        time.sleep(.5)
-        # print('waiting for votes')
-    if state == 'candidate':
+            try:
+                skt.sendto(json.dumps(requestVote_rpc).encode(), (node, 5555))
+            except:
+                print(node + ' is down')
+    if not voted:
+        voted = True
+        votes = 1
+    currentTerm += 1
+    print('voting for myself')
+    time.sleep(1)
+    if state == 'candidate' and votes >= 3:
         state = 'leader'
         threading.Thread(target=heartbeat, args=[UDP_Socket]).start()
         skt.settimeout(None)
         voted = False
+    else:
+        state = 'follower'
+        voted = False
     votes = 0
+    Timeout = random.uniform(.25, .4)
+    skt.settimeout(Timeout)
     print("Ending Election")
 
 # Function to decode different message types
@@ -61,9 +68,11 @@ def message_handler(msg, skt):
         if msg['Entries'] == []:
             if state == 'leader':
                 skt.settimeout(Timeout)
-            state = 'follower'
+            elif state == 'candidate':
+                state = 'follower'
             voted = False
             beat_time = time.perf_counter()
+            print('Heartbeat from ' + msg['leaderId'])
 
     elif 'Term' in msg:
         if currentTerm <= msg['Term'] and not voted:
@@ -75,7 +84,7 @@ def message_handler(msg, skt):
 
     elif 'voteReply' in msg:
         global votes
-        print(votes)
+        # print(votes)
         votes += 1
 
     else:
@@ -84,6 +93,7 @@ def message_handler(msg, skt):
 # Listener
 def listener(skt):
     global beat_time
+    global state 
     beat_time = time.perf_counter()
     print(f"Starting Listener ")
     while True:
@@ -91,11 +101,11 @@ def listener(skt):
             msg, addr = skt.recvfrom(1024)
             # Decoding the Message received from leader
             decoded_msg = json.loads(msg.decode('utf-8'))
-            print(f"Message Received : {decoded_msg} From : {addr}")
+            # print(f"Message Received : {decoded_msg} From : {addr}")
             threading.Thread(target=message_handler, args=[decoded_msg, skt]).start()
         except:
             # Timeout functionality if no messages received 
-            if beat_time != 0 and beat_time - time.perf_counter() > Timeout and state == 'follower':
+            if time.perf_counter() - beat_time > Timeout and state == 'follower':
                 state = 'candidate'
                 threading.Thread(target=start_election, args=[skt]).start()
             # print(f"ERROR while fetching from socket : {traceback.print_exc()}")
@@ -109,8 +119,11 @@ def heartbeat(skt):
             time.sleep(Heartbeat)
             for node in nodes:
                 if node != name:
-                    skt.sendto(json.dumps(append_rpc).encode(), (node, 5555))
-                    print("sent to " + node)
+                    try:
+                        skt.sendto(json.dumps(append_rpc).encode(), (node, 5555))
+                    except:
+                        print(node + ' is down')
+                    # print("sent to " + node)
 
 if __name__ == "__main__":
     # Creating Socket and binding it to the target container IP and port
@@ -120,7 +133,6 @@ if __name__ == "__main__":
     UDP_Socket.bind((name, 5555))
     # Set timeout for socket if hasn't gotten any messages
     UDP_Socket.settimeout(Timeout)
-
     # Starting heartbeat and listener
     threading.Thread(target=listener, args=[UDP_Socket]).start()
 

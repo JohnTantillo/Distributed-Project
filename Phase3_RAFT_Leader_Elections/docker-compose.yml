@@ -24,6 +24,18 @@ services:
      container_name: Node3
      build: Node/.
 
+   node4:
+     environment: 
+       - NAME=Node4
+     container_name: Node4
+     build: Node/.
+
+   node5:
+     environment: 
+       - NAME=Node5
+     container_name: Node5
+     build: Node/.
+
    #Do not change the part below
    controller:
        container_name: Controller
