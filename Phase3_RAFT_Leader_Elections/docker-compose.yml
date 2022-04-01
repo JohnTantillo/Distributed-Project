@@ -18,9 +18,11 @@ services:
      container_name: Node2
      build: Node/.
 
-  #  node3:
-  #      container_name: Node3
-  #      build: Node/.
+   node3:
+     environment: 
+       - NAME=Node3
+     container_name: Node3
+     build: Node/.
 
    #Do not change the part below
    controller:
