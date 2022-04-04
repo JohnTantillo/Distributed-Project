@@ -1,6 +1,6 @@
 FROM python:3.7-alpine3.14
 
-COPY app.py .
+COPY . .
 
 EXPOSE 5555
 

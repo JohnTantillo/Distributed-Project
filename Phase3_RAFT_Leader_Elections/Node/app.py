@@ -6,10 +6,14 @@ import traceback
 import random
 import os
 
+# TODO: Persist data needed for RAFT, test different controller commands
+
 # Global information that will be stored in a volume
 Timeout = random.uniform(.25, .4)
+current_leader = ""
 currentTerm = 0
 voted = False
+votedFor = ""
 Log = []
 Heartbeat = .1
 name = os.environ['NAME']
@@ -17,6 +21,24 @@ nodes = ["Node1", "Node2", 'Node3', 'Node4', 'Node5']
 state = "follower"
 beat_time = 0
 votes = 0
+kill = False
+
+def create_message(request_type):
+    message = json.load(open("Message.json"))
+    message['sender_name'] = name
+    message['request'] = request_type
+    message['term'] = currentTerm
+    if request_type == 'VOTE_REQUEST':
+        message['Term'] = currentTerm
+        message['candidateId'] = name
+        message['lastLogIndex'] = -1
+        message['lastLogTerm'] = -1
+    elif request_type == 'APPEND_RPC':
+        message['leaderId'] = name
+        message['Entries'] = []
+        message['prevLogIndex'] = -1
+        message['prevLogTerm'] = -1
+    return message
 
 def start_election(skt):
     global state
@@ -24,16 +46,18 @@ def start_election(skt):
     global currentTerm
     global voted
     global Timeout
-    requestVote_rpc = {'Term': currentTerm, 'candidateId': name, 'lastLogIndex': -1, 'lastLogTerm': 0}
+    global votedFor
+    message = create_message("VOTE_REQUEST")
     for node in nodes:
         if node != name:
             try:
-                skt.sendto(json.dumps(requestVote_rpc).encode(), (node, 5555))
+                skt.sendto(json.dumps(message).encode(), (node, 5555))
             except:
                 print(node + ' is down')
     if not voted:
         voted = True
         votes = 1
+        votedFor = name
     currentTerm += 1
     print('voting for myself')
     time.sleep(Timeout)
@@ -56,14 +80,18 @@ def message_handler(msg, skt):
     global beat_time
     global voted
     global state
+    global current_leader
+    global kill
     new_time = time.perf_counter()
     if new_time - beat_time > Timeout and state == 'follower':
         state = 'candidate'
         print("Starting Election")
         threading.Thread(target=start_election, args=[skt]).start()
     
+    request = msg['request']
+
     # APPEND_RPC
-    if 'leaderId' in msg:
+    if request == 'APPEND_RPC':
         # Heartbeat received, refresh timeout
         if msg['Entries'] == []:
             if state == 'leader':
@@ -72,23 +100,45 @@ def message_handler(msg, skt):
                 state = 'follower'
             voted = False
             beat_time = time.perf_counter()
+            current_leader = msg['leaderId']
             print('Heartbeat from ' + msg['leaderId'])
 
-    elif 'Term' in msg:
+    elif request == 'VOTE_REQUEST':
         if currentTerm <= msg['Term'] and not voted:
             voted = True
             node = msg['candidateId']
             print("voting for " + node)
-            vote_reply = {'voteReply': True}
+            vote_reply = create_message('VOTE_ACK')
             skt.sendto(json.dumps(vote_reply).encode(), (node, 5555))
+            global votedFor
+            votedFor = node
 
-    elif 'voteReply' in msg:
+    elif request == 'VOTE_ACK':
         global votes
         # print(votes)
         votes += 1
 
+    elif request == 'CONVERT_FOLLOWER':
+        state = 'follower'
+        if kill:
+            kill = False
+            threading.Thread(target=listener, args=[UDP_Socket]).start()
+    
+    elif request == 'TIMEOUT':
+        state = 'candidate'
+        threading.Thread(target=start_election, args=[skt]).start()
+   
+    elif request == "SHUTDOWN":
+        kill = True
+
+    elif request == "LEADER_INFO":
+        if state == 'leader':
+            current_leader = name
+        print('The current leader is ' + current_leader)
+        return {'LEADER':current_leader}
+
     else:
-        print("I can't do that yet")
+        print("UNSUPPORTED MESSAGE TYPE, PLEASE RECONSIDER")
             
 # Listener
 def listener(skt):
@@ -97,6 +147,8 @@ def listener(skt):
     beat_time = time.perf_counter()
     print(f"Starting Listener ")
     while True:
+        if kill:
+            return
         try:
             msg, addr = skt.recvfrom(1024)
             # Decoding the Message received from leader
@@ -113,14 +165,16 @@ def listener(skt):
     print("Exiting Listener Function")
 
 def heartbeat(skt):
-    append_rpc = {"leaderId": name, "Entries":[], "prevLogIndex":-1, "prevLogTerm":-1}
+    beat = create_message('APPEND_RPC')
     while True:
+        if kill:
+            return
         if state == 'leader':
             time.sleep(Heartbeat)
             for node in nodes:
                 if node != name:
                     try:
-                        skt.sendto(json.dumps(append_rpc).encode(), (node, 5555))
+                        skt.sendto(json.dumps(beat).encode(), (node, 5555))
                     except:
                         print(node + ' is down')
                     # print("sent to " + node)
