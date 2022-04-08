@@ -134,6 +134,10 @@ def message_handler(msg, skt):
     elif request == "LEADER_INFO":
         if state == 'leader':
             current_leader = name
+        reply = create_message("LEADER_INFO")
+        reply['key'] = 'LEADER'
+        reply['value'] = current_leader
+        skt.sendto(json.dumps(reply).encode(), ('Controller', 5555))
         print('The current leader is ' + current_leader)
         return {'LEADER':current_leader}
 
@@ -147,6 +151,7 @@ def listener(skt):
     beat_time = time.perf_counter()
     print(f"Starting Listener ")
     while True:
+        data = {"currentTerm": currentTerm, "votedFor": votedFor, "Log": [], "Timeout": Timeout, 'Heartbeat': Heartbeat}
         if kill:
             return
         try:
@@ -161,12 +166,17 @@ def listener(skt):
                 state = 'candidate'
                 threading.Thread(target=start_election, args=[skt]).start()
             # print(f"ERROR while fetching from socket : {traceback.print_exc()}")
+        data['currentTerm'] = currentTerm
+        data['votedFor'] = votedFor
+        with open(name+".txt", 'w') as f:
+            f.write(str(data))
 
     print("Exiting Listener Function")
 
 def heartbeat(skt):
     beat = create_message('APPEND_RPC')
     while True:
+        data = {"currentTerm": currentTerm, "votedFor": votedFor, "Log": [], "Timeout": Timeout, 'Heartbeat': Heartbeat}
         if kill:
             return
         if state == 'leader':
@@ -177,9 +187,20 @@ def heartbeat(skt):
                         skt.sendto(json.dumps(beat).encode(), (node, 5555))
                     except:
                         print(node + ' is down')
+            with open(name+".txt", 'w') as f:
+                f.write(str(data))
                     # print("sent to " + node)
 
 if __name__ == "__main__":
+    with open(name+".txt", 'r') as f:
+        info = f.read()
+        print(info)
+    global Timeout
+    global currentTerm
+    global votedFor
+    Timeout = info['Timeout']
+    currentTerm = info['currentTerm']
+    votedFor = info['votedFor']
     # Creating Socket and binding it to the target container IP and port
     UDP_Socket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
 

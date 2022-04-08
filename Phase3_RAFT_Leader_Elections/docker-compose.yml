@@ -11,38 +11,58 @@ services:
        - NAME=Node1
      container_name: Node1
      build: Node/.
+     volumes: 
+       - data-persist:/app
 
    node2:
      environment: 
        - NAME=Node2
      container_name: Node2
      build: Node/.
+     volumes: 
+       - data-persist-2:/app
 
    node3:
      environment: 
        - NAME=Node3
      container_name: Node3
      build: Node/.
+     volumes: 
+       - data-persist-3:/app
 
    node4:
      environment: 
        - NAME=Node4
      container_name: Node4
      build: Node/.
+     volumes: 
+       - data-persist-4:/app
 
    node5:
      environment: 
        - NAME=Node5
      container_name: Node5
      build: Node/.
+     volumes: 
+       - data-persist-5:/app
 
    #Do not change the part below
    controller:
        container_name: Controller
        build: Controller/.
        stdin_open: true
-
-
+       
+volumes:
+  data-persist:
+    external: true
+  data-persist-2:
+    external: true
+  data-persist-3:
+    external: true
+  data-persist-4:
+    external: true
+  data-persist-5:
+    external: true
 
 
 
