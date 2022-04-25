@@ -4,7 +4,7 @@ import traceback
 import time
 
 # Wait following seconds below sending the controller request
-time.sleep(5)
+time.sleep(3)
 
 # Read Message Template
 msg = json.load(open("Message.json"))
@@ -16,8 +16,6 @@ port = 5555
 
 # Request
 msg['sender_name'] = sender
-#msg['request'] = "CONVERT_FOLLOWER"
-#msg['request'] = "SHUTDOWN"
 msg['request'] = "LEADER_INFO"
 print(f"Request Created : {msg}")
 
@@ -39,7 +37,9 @@ while True:
         print(f"Message Received : {decoded_msg} From : {addr}")
         time.sleep(1)
         leader = decoded_msg['value']
-        decoded_msg['request'] = 'CONVERT_FOLLOWER'
+        # decoded_msg['request'] = 'CONVERT_FOLLOWER'
+        decoded_msg['request'] = "SHUTDOWN"
+        # decoded_msg['request'] = "TIMEOUT"
         skt.sendto(json.dumps(decoded_msg).encode('utf-8'), (leader, port))
         break
     except:

@@ -5,6 +5,7 @@ import json
 import traceback
 import random
 import os
+from queue import Queue
 
 # TODO: Persist data needed for RAFT, test different controller commands
 
@@ -22,22 +23,27 @@ state = "follower"
 beat_time = 0
 votes = 0
 kill = False
+current_key = 0
 
 def create_message(request_type):
     message = json.load(open("Message.json"))
     message['sender_name'] = name
     message['request'] = request_type
     message['term'] = currentTerm
+    message['key'] = -1
     if request_type == 'VOTE_REQUEST':
-        message['Term'] = currentTerm
-        message['candidateId'] = name
-        message['lastLogIndex'] = -1
-        message['lastLogTerm'] = -1
+        request_vote = {'candidateId': name, 'lastLogIndex': -1, 'lastLogTerm': -1}
+        message['value'] = request_vote
     elif request_type == 'APPEND_RPC':
-        message['leaderId'] = name
-        message['Entries'] = []
-        message['prevLogIndex'] = -1
-        message['prevLogTerm'] = -1
+        append_rpc = {'leaderId': name, 'Entries': Log, 'prevLogIndex': -1, 'prevLogTerm': -1}
+        message['value'] = append_rpc
+    elif request_type == 'LEADER_INFO':
+        message['key'] = 'LEADER'
+        message['value'] = current_leader
+    elif request_type == 'RETRIEVE':
+        message['term'] = None
+        message['key'] = 'COMMITED_LOGS'
+        message['value'] = Log
     return message
 
 def start_election(skt):
@@ -60,7 +66,7 @@ def start_election(skt):
         votedFor = name
     currentTerm += 1
     print('voting for myself')
-    time.sleep(Timeout)
+    time.sleep(1)
     if state == 'candidate' and votes >= 3:
         state = 'leader'
         threading.Thread(target=heartbeat, args=[UDP_Socket]).start()
@@ -135,12 +141,23 @@ def message_handler(msg, skt):
         if state == 'leader':
             current_leader = name
         reply = create_message("LEADER_INFO")
-        reply['key'] = 'LEADER'
-        reply['value'] = current_leader
         skt.sendto(json.dumps(reply).encode(), ('Controller', 5555))
         print('The current leader is ' + current_leader)
         return {'LEADER':current_leader}
 
+    elif request == "STORE":
+        if state == 'leader':
+            Log.append({'Term': msg['term'], 'Key': msg['key'], 'Value': msg['value']})
+        else:
+            reply = create_message("LEADER_INFO")
+            skt.sendto(json.dumps(reply).encode(), ('Controller', 5555))
+
+    elif request == "RETRIEVE":
+        if state == 'leader':
+            reply = create_message("RETRIEVE")
+        else:
+            reply = create_message("LEADER_INFO")
+            skt.sendto(json.dumps(reply).encode(), ('Controller', 5555))
     else:
         print("UNSUPPORTED MESSAGE TYPE, PLEASE RECONSIDER")
             
