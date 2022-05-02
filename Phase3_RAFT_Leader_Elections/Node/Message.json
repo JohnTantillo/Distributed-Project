@@ -3,5 +3,13 @@
   "request": null,
   "term": null,
   "key": null,
-  "value": null
+  "value": null,
+  "candidateID": null,
+  "lastLogIndex": null,
+  "lastLogTerm": null,
+  "leaderId": null,
+  "Entries": null,
+  "prevLogIndex": null,
+  "prevLogTerm": null,
+  "leaderCommit": null
 }
