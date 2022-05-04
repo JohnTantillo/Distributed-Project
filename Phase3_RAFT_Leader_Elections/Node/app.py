@@ -5,12 +5,12 @@ import json
 import traceback
 import random
 import os
-from queue import Queue
 
 # TODO: Persist data needed for RAFT, test different controller commands
+# TODO: CHANGE REPLY SO THAT ATTEMPTING TO APPEND OLDER MESSAGES DOESN'T BREAK BECAUSE OF TERM DIFFERENCE
 
 # Global information that will be stored in a volume
-Timeout = random.uniform(.25, .4)
+Timeout = random.uniform(.35, .45)
 current_leader = ""
 currentTerm = 0
 voted = False
@@ -49,12 +49,6 @@ def create_message(request_type):
         else:
             message['prevLogTerm'] = Log[lastApplied]['Term']
         message['leaderCommit'] = commitIndex
-    elif request_type == 'HEARTBEAT':
-        message['request'] = 'APPEND_RPC'
-        message['leaderId'] = name
-        message['Entries'] = []
-        message['prevLogIndex'] = -1
-        message['prevLogTerm'] = -1
     elif request_type == 'LEADER_INFO':
         message['key'] = 'LEADER'
         message['value'] = current_leader
@@ -115,9 +109,7 @@ def message_handler(msg, skt):
     global lastApplied
     global commitIndex
     global Log
-    global nextIndex
-    global matchIndex
-    global updated
+    global currentTerm
     new_time = time.perf_counter()
     if new_time - beat_time > Timeout and state == 'follower':
         state = 'candidate'
@@ -129,63 +121,81 @@ def message_handler(msg, skt):
     # APPEND_RPC
     if request == 'APPEND_RPC':
         # Heartbeat received, refresh timeout
+        beat_time = time.perf_counter()
+        current_leader = msg['leaderId']
         if msg['Entries'] == []:
             if state == 'leader':
                 skt.settimeout(Timeout)
             elif state == 'candidate':
+                if currentTerm > msg['term']:
+                    currentTerm = msg['term'] - 1
                 state = 'follower'
             voted = False
-            beat_time = time.perf_counter()
-            current_leader = msg['leaderId']
             # print('Heartbeat from ' + msg['leaderId'])
         else:
             # if msg['prevLogIndex'] > -1:
             #     print(Log[msg['prevLogIndex']])
-            if msg['prevLogIndex'] == -1:
+            if Log == []:
+                print('First append')
                 Log.append(msg['Entries'][0])
                 lastApplied += 1
                 print(Log)
-                print(lastApplied)
+                # print(lastApplied)
                 reply = create_message('APPEND_REPLY')
                 reply['value'] = True
                 skt.sendto(json.dumps(reply).encode(), (current_leader, 5555)) # CHANGE RETURNS TO SEND APPEND REPLY
 
             elif msg['prevLogIndex'] >= len(Log):
                 print("index too long")
-                print(len(Log))
-                print(msg['prevLogIndex'])
+                # print(len(Log))
+                # print(msg['prevLogIndex'])
                 reply = create_message('APPEND_REPLY')
                 reply['value'] = False
                 skt.sendto(json.dumps(reply).encode(), (current_leader, 5555))
 
-            elif msg['term'] < currentTerm or Log[msg['prevLogIndex']]['Term'] != msg['prevLogTerm']:
-                print('Something isnt matching')
-                print('message: ' + str(msg))
-                print('Log: ' + str(Log))
-                print('current term: ' + str(currentTerm))
+            elif msg['term'] < currentTerm:
+                print('Message term lower than current')
+                # print('message: ' + str(msg))
+                # print('current term: ' + str(currentTerm))
+                # print('msg: ' + str(msg))
+                # print('current term: ' + str(currentTerm))
                 reply = create_message('APPEND_REPLY')
                 reply['value'] = False
                 skt.sendto(json.dumps(reply).encode(), (current_leader, 5555))
-                
-            elif msg['prevLogIndex'] + 1 < len(Log):
-                if Log[msg['prevLogIndex']+1]['Term'] != msg['term']:
-                    Log = Log[:msg['prevLogIndex']+1]
+
+            elif Log[msg['prevLogIndex']]['Term'] != msg['prevLogTerm']:
+                print('Disagreement on terms')
                 reply = create_message('APPEND_REPLY')
-                reply['value'] = True
+                reply['value'] = False
                 skt.sendto(json.dumps(reply).encode(), (current_leader, 5555))
+
+            # elif msg['prevLogIndex'] + 1 < len(Log):
+            #     if Log[msg['prevLogIndex']+1]['Term'] != msg['term']:
+            #         Log = Log[:msg['prevLogIndex']+1]
+            #     reply = create_message('APPEND_REPLY')
+            #     reply['value'] = True
+            #     skt.sendto(json.dumps(reply).encode(), (current_leader, 5555))
 
             else:
-                Log.append(msg['Entries'][0])
+                # print('Everything looks fine')
+                if msg['prevLogIndex'] + 1 >= len(Log):
+                    print('Appending')
+                    # print(Log)
+                    # print(msg)
+                    Log.append(msg['Entries'][0])
+                else: 
+                    # print('Editing')
+                    Log[msg['prevLogIndex']+1] = msg['Entries'][0]
                 lastApplied += 1
                 print(Log)
-                print(lastApplied)
+                # print(lastApplied)
                 reply = create_message('APPEND_REPLY')
                 reply['value'] = True
                 skt.sendto(json.dumps(reply).encode(), (current_leader, 5555))
 
             if msg['leaderCommit'] > commitIndex:
                 commitIndex = msg['leaderCommit']
-
+            
     elif request == 'VOTE_REQUEST':
         if currentTerm <= msg['term'] and not voted:
             voted = True
@@ -224,8 +234,9 @@ def message_handler(msg, skt):
     elif request == "STORE":
         if state == 'leader':
             entry = {'Term': currentTerm, 'Key': msg['key'], 'Value': msg['value']}
+            lastApplied += 1
             Log.append(entry)
-            updated = True
+            print(Log)
         else:
             reply = create_message("LEADER_INFO")
             skt.sendto(json.dumps(reply).encode(), ('Controller', 5555))
@@ -245,24 +256,24 @@ def message_handler(msg, skt):
         else: 
             if nextIndex[node_num] != 0:
                 nextIndex[node_num] -= 1
-                app_rpc = create_message("APPEND_RPC")
-                app_rpc['prevLogIndex'] = nextIndex[node_num]
-                app_rpc['prevLogTerm'] = Log[nextIndex[node_num]]['Term']
-                app_rpc['Entries'].append(Log[nextIndex[node_num]])
-                skt.sendto(json.dumps(app_rpc).encode(), (msg['sender_name'], 5555))
+                # app_rpc = create_message("APPEND_RPC")
+                # app_rpc['prevLogIndex'] = nextIndex[node_num]
+                # app_rpc['prevLogTerm'] = Log[nextIndex[node_num]]['Term']
+                # app_rpc['Entries'].append(Log[nextIndex[node_num]])
+                # skt.sendto(json.dumps(app_rpc).encode(), (msg['sender_name'], 5555))
         matcher = {}
         for i in matchIndex:
             if i not in matcher:
                 matcher[i] = 1
             else:
                 for key in matcher:
-                    if i >= matcher[key]:
+                    if i >= matcher[key]: 
                         matcher[key] += 1
         for ind in matcher:
             if matcher[ind] >= 2 and ind > commitIndex:
                 commitIndex = ind
-        print("commit index: " + str(commitIndex))
-        print('match index: ' + str(matchIndex))
+        # print("commit index: " + str(commitIndex))
+        # print('match index: ' + str(matchIndex))
         print('next index: ' + str(nextIndex))
     else:
         print("UNSUPPORTED MESSAGE TYPE, PLEASE RECONSIDER")
@@ -286,6 +297,7 @@ def listener(skt):
         except:
             # Timeout functionality if no messages received 
             if time.perf_counter() - beat_time > Timeout and state == 'follower':
+                # print('no messages recieved')
                 state = 'candidate'
                 threading.Thread(target=start_election, args=[skt]).start()
             # print(f"ERROR while fetching from socket : {traceback.print_exc()}")
@@ -297,35 +309,27 @@ def listener(skt):
     print("Exiting Listener Function")
 
 def heartbeat(skt):
-    global updated
-    global lastApplied
     print('I am the leader')
-    beat = create_message('HEARTBEAT')
     while True:
         data = {"currentTerm": currentTerm, "votedFor": votedFor, "Log": [], "Timeout": Timeout, 'Heartbeat': Heartbeat}
         if kill:
             return
         if state == 'leader':
             time.sleep(Heartbeat)
-            if not updated:
-                for node in nodes:
-                    if node != name:
-                        try:
-                            skt.sendto(json.dumps(beat).encode(), (node, 5555))
-                        except:
-                            print(node + ' is down')
-            else:
-                updated = False
+            for node in nodes:
                 app_rpc = create_message("APPEND_RPC")
-                lastApplied += 1
-                app_rpc['Entries'].append(Log[lastApplied])
-                for node in nodes:
-                    if node != name:
-                        try:
-                            skt.sendto(json.dumps(app_rpc).encode(), (node, 5555))
-                        except:
-                            print(node + ' is down')
-                print(Log)
+                node_num = int(node[-1])-1
+                node_ind = nextIndex[node_num] - 1
+                if node_ind <= lastApplied and lastApplied >= 0:
+                    app_rpc['prevLogIndex'] = node_ind
+                    app_rpc['prevLogTerm'] = Log[node_ind]['Term']
+                    app_rpc['Entries'].append(Log[node_ind])
+                if node != name:
+                    try:
+                        # print(app_rpc)
+                        skt.sendto(json.dumps(app_rpc).encode(), (node, 5555))
+                    except:
+                        print(node + ' is down')
             with open(name+".txt", 'w') as f:
                 f.write(str(data))
                     # print("sent to " + node)

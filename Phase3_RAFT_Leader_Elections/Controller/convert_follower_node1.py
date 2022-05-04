@@ -90,18 +90,18 @@ if __name__ == "__main__":
         if leader != '':
             skt.sendto(json.dumps(msg2).encode('utf-8'), (leader, port))
             time.sleep(2)
-            skt.sendto(json.dumps(msg4).encode('utf-8'), (leader, port))
-            time.sleep(2)
-            skt.sendto(json.dumps(msg5).encode('utf-8'), (leader, port))
-            time.sleep(2)
+            # skt.sendto(json.dumps(msg4).encode('utf-8'), (leader, port))
+            # time.sleep(2)
+            # skt.sendto(json.dumps(msg5).encode('utf-8'), (leader, port))
+            # time.sleep(2)
             skt.sendto(json.dumps(msg3).encode('utf-8'), (leader, port))
         else:
             skt.sendto(json.dumps(msg2).encode('utf-8'), (leader, port))
             time.sleep(2)
-            skt.sendto(json.dumps(msg4).encode('utf-8'), (leader, port))
-            time.sleep(2)
-            skt.sendto(json.dumps(msg5).encode('utf-8'), (leader, port))
-            time.sleep(2)
+            # skt.sendto(json.dumps(msg4).encode('utf-8'), (leader, port))
+            # time.sleep(2)
+            # skt.sendto(json.dumps(msg5).encode('utf-8'), (leader, port))
+            # time.sleep(2)
             skt.sendto(json.dumps(msg3).encode('utf-8'), (leader, port))
     except:
         #  socket.gaierror: [Errno -3] would be thrown if target IP container does not exist or exits, write your listener
