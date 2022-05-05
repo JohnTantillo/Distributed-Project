@@ -11,11 +11,11 @@ def message_handler(msg, skt):
     if request == "LEADER_INFO":
         global leader 
         leader = msg['value']
-        msg['sender_name'] = sender
-        msg['request'] = "STORE"
-        msg['key'] = 'K1'
-        msg['value'] = 'This is the message'
-        skt.sendto(json.dumps(msg).encode(), (leader, 5555))
+        # msg['sender_name'] = sender
+        # msg['request'] = "STORE"
+        # msg['key'] = 'K1'
+        # msg['value'] = 'This is NOT the message'
+        # skt.sendto(json.dumps(msg).encode(), (leader, 5555))
 
     elif request == "RETRIEVE":
         print(msg['value'])
@@ -82,27 +82,23 @@ if __name__ == "__main__":
     skt.bind((sender, port))
 
     threading.Thread(target=listener, args=[skt]).start()
+    skt.sendto(json.dumps(msg5).encode(), (leader, 5555))
+    time.sleep(5)
     # Send Message
     try:
         # Encoding and sending the message
         skt.sendto(json.dumps(msg).encode('utf-8'), (target, port))
         time.sleep(2)
-        if leader != '':
-            skt.sendto(json.dumps(msg2).encode('utf-8'), (leader, port))
-            time.sleep(2)
-            # skt.sendto(json.dumps(msg4).encode('utf-8'), (leader, port))
-            # time.sleep(2)
-            # skt.sendto(json.dumps(msg5).encode('utf-8'), (leader, port))
-            # time.sleep(2)
-            skt.sendto(json.dumps(msg3).encode('utf-8'), (leader, port))
-        else:
-            skt.sendto(json.dumps(msg2).encode('utf-8'), (leader, port))
-            time.sleep(2)
-            # skt.sendto(json.dumps(msg4).encode('utf-8'), (leader, port))
-            # time.sleep(2)
-            # skt.sendto(json.dumps(msg5).encode('utf-8'), (leader, port))
-            # time.sleep(2)
-            skt.sendto(json.dumps(msg3).encode('utf-8'), (leader, port))
+        # if leader != '':
+        skt.sendto(json.dumps(msg).encode(), (leader, 5555))
+        time.sleep(2)
+        skt.sendto(json.dumps(msg2).encode('utf-8'), (leader, port))
+        time.sleep(2)
+        skt.sendto(json.dumps(msg4).encode('utf-8'), (leader, port))
+        time.sleep(2)
+        skt.sendto(json.dumps(msg5).encode('utf-8'), (leader, port))
+        time.sleep(2)
+        skt.sendto(json.dumps(msg3).encode('utf-8'), (leader, port))
     except:
         #  socket.gaierror: [Errno -3] would be thrown if target IP container does not exist or exits, write your listener
         print(f"ERROR WHILE SENDING REQUEST ACROSS : {traceback.format_exc()}")

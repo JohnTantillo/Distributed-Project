@@ -85,7 +85,8 @@ def start_election(skt):
     time.sleep(1)
     if state == 'candidate' and votes >= 3:
         matchIndex = [0,0,0,0,0]
-        nextIndex = [commitIndex+1]*5
+        nextIndex = [lastApplied+1]*5
+        print(nextIndex)
         state = 'leader'
         threading.Thread(target=heartbeat, args=[UDP_Socket]).start()
         skt.settimeout(None)
@@ -127,8 +128,8 @@ def message_handler(msg, skt):
             if state == 'leader':
                 skt.settimeout(Timeout)
             elif state == 'candidate':
-                if currentTerm > msg['term']:
-                    currentTerm = msg['term'] - 1
+                if currentTerm != msg['term']:
+                    currentTerm = msg['term']
                 state = 'follower'
             voted = False
             # print('Heartbeat from ' + msg['leaderId'])
@@ -139,26 +140,27 @@ def message_handler(msg, skt):
                 print('First append')
                 Log.append(msg['Entries'][0])
                 lastApplied += 1
-                print(Log)
+                # print(Log)
                 # print(lastApplied)
                 reply = create_message('APPEND_REPLY')
                 reply['value'] = True
                 skt.sendto(json.dumps(reply).encode(), (current_leader, 5555)) # CHANGE RETURNS TO SEND APPEND REPLY
-
-            elif msg['prevLogIndex'] >= len(Log):
+            
+            # elif msg['prevLogIndex'] == len(Log): 
+            #     return 
+            
+            elif msg['prevLogIndex'] > len(Log):
                 print("index too long")
-                # print(len(Log))
-                # print(msg['prevLogIndex'])
+                print(len(Log))
+                print(msg['prevLogIndex'])
                 reply = create_message('APPEND_REPLY')
                 reply['value'] = False
                 skt.sendto(json.dumps(reply).encode(), (current_leader, 5555))
 
             elif msg['term'] < currentTerm:
                 print('Message term lower than current')
-                # print('message: ' + str(msg))
-                # print('current term: ' + str(currentTerm))
-                # print('msg: ' + str(msg))
-                # print('current term: ' + str(currentTerm))
+                print('message: ' + str(msg))
+                print('current term: ' + str(currentTerm))
                 reply = create_message('APPEND_REPLY')
                 reply['value'] = False
                 skt.sendto(json.dumps(reply).encode(), (current_leader, 5555))
@@ -169,24 +171,27 @@ def message_handler(msg, skt):
                 reply['value'] = False
                 skt.sendto(json.dumps(reply).encode(), (current_leader, 5555))
 
-            # elif msg['prevLogIndex'] + 1 < len(Log):
-            #     if Log[msg['prevLogIndex']+1]['Term'] != msg['term']:
-            #         Log = Log[:msg['prevLogIndex']+1]
-            #     reply = create_message('APPEND_REPLY')
-            #     reply['value'] = True
-            #     skt.sendto(json.dumps(reply).encode(), (current_leader, 5555))
+            elif msg['prevLogIndex'] + 1 < len(Log):
+                if Log[msg['prevLogIndex']+1]['Term'] != msg['term']:
+                    Log = Log[:msg['prevLogIndex']+1]
+                reply = create_message('APPEND_REPLY')
+                print(Log)
+                reply['value'] = True
+                skt.sendto(json.dumps(reply).encode(), (current_leader, 5555))
 
             else:
                 # print('Everything looks fine')
-                if msg['prevLogIndex'] + 1 >= len(Log):
+                if msg['Entries'][0] in Log:
+                    return
+                elif msg['prevLogIndex'] + 1 >= len(Log):
                     print('Appending')
-                    # print(Log)
-                    # print(msg)
+                    print(Log)
                     Log.append(msg['Entries'][0])
                 else: 
-                    # print('Editing')
+                    print('Editing')
                     Log[msg['prevLogIndex']+1] = msg['Entries'][0]
                 lastApplied += 1
+                # print(msg)
                 print(Log)
                 # print(lastApplied)
                 reply = create_message('APPEND_REPLY')
@@ -233,8 +238,8 @@ def message_handler(msg, skt):
 
     elif request == "STORE":
         if state == 'leader':
-            entry = {'Term': currentTerm, 'Key': msg['key'], 'Value': msg['value']}
             lastApplied += 1
+            entry = {'Term': currentTerm, 'Key': msg['key'], 'Value': msg['value']}
             Log.append(entry)
             print(Log)
         else:
@@ -256,11 +261,6 @@ def message_handler(msg, skt):
         else: 
             if nextIndex[node_num] != 0:
                 nextIndex[node_num] -= 1
-                # app_rpc = create_message("APPEND_RPC")
-                # app_rpc['prevLogIndex'] = nextIndex[node_num]
-                # app_rpc['prevLogTerm'] = Log[nextIndex[node_num]]['Term']
-                # app_rpc['Entries'].append(Log[nextIndex[node_num]])
-                # skt.sendto(json.dumps(app_rpc).encode(), (msg['sender_name'], 5555))
         matcher = {}
         for i in matchIndex:
             if i not in matcher:
@@ -319,11 +319,20 @@ def heartbeat(skt):
             for node in nodes:
                 app_rpc = create_message("APPEND_RPC")
                 node_num = int(node[-1])-1
-                node_ind = nextIndex[node_num] - 1
-                if node_ind <= lastApplied and lastApplied >= 0:
+                if nextIndex[node_num] == lastApplied:
+                    node_ind = lastApplied - 1
+                else:
+                    node_ind = nextIndex[node_num] - 1
+                if node != name and node_ind < lastApplied and lastApplied >= 0:
+                    # print(node)
+                    # print('next index: ' + str(nextIndex))
+                    # print('Sending')
+                    # print('last applied: ' + str(lastApplied))
+                    # print('node ind: ' + str(node_ind))
+                    # print(Log[node_ind])
                     app_rpc['prevLogIndex'] = node_ind
-                    app_rpc['prevLogTerm'] = Log[node_ind]['Term']
-                    app_rpc['Entries'].append(Log[node_ind])
+                    app_rpc['prevLogTerm'] = currentTerm
+                    app_rpc['Entries'].append(Log[node_ind+1])
                 if node != name:
                     try:
                         # print(app_rpc)
