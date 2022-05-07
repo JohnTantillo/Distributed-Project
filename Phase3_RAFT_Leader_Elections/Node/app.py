@@ -38,8 +38,11 @@ def create_message(request_type):
     message['key'] = -1
     if request_type == 'VOTE_REQUEST':
         message['candidateId'] = name
-        message['lastLogIndex'] = -1
-        message['lastLogTerm'] = -1
+        message['lastLogIndex'] = len(Log) - 1
+        if len(Log) == 0:
+            message['lastLogTerm'] = -1
+        else:
+            message['lastLogTerm'] = Log[-1]['Term']
     elif request_type == 'APPEND_RPC':
         message['leaderId'] = name
         message['Entries'] = []
@@ -75,13 +78,12 @@ def start_election(skt):
             try:
                 skt.sendto(json.dumps(message).encode(), (node, 5555))
             except:
-                print(node + ' is down')
+                a = 1
     if not voted:
         voted = True
         votes = 1
         votedFor = name
     currentTerm += 1
-    # print('voting for myself')
     time.sleep(1)
     if state == 'candidate' and votes >= 3:
         matchIndex = [0,0,0,0,0]
@@ -97,7 +99,6 @@ def start_election(skt):
     votes = 0
     Timeout = random.uniform(.25, .4)
     skt.settimeout(Timeout)
-    # print("Ending Election")
 
 # Function to decode different message types
 def message_handler(msg, skt):
@@ -114,7 +115,6 @@ def message_handler(msg, skt):
     new_time = time.perf_counter()
     if new_time - beat_time > Timeout and state == 'follower':
         state = 'candidate'
-        # print("Starting Election")
         threading.Thread(target=start_election, args=[skt]).start()
     
     request = msg['request']
@@ -132,24 +132,20 @@ def message_handler(msg, skt):
                     currentTerm = msg['term']
                 state = 'follower'
             voted = False
-            # print('Heartbeat from ' + msg['leaderId'])
         else:
-            # if msg['prevLogIndex'] > -1:
-            #     print(Log[msg['prevLogIndex']])
-            if Log == []:
+            if currentTerm != msg['term']:
+                currentTerm = msg['term']
+
+            if Log == [] and lastApplied == msg['prevLogIndex']:
                 print('First append')
                 Log.append(msg['Entries'][0])
                 lastApplied += 1
-                # print(Log)
-                # print(lastApplied)
                 reply = create_message('APPEND_REPLY')
                 reply['value'] = True
-                skt.sendto(json.dumps(reply).encode(), (current_leader, 5555)) # CHANGE RETURNS TO SEND APPEND REPLY
-            
-            # elif msg['prevLogIndex'] == len(Log): 
-            #     return 
-            
-            elif msg['prevLogIndex'] > len(Log):
+                skt.sendto(json.dumps(reply).encode(), (current_leader, 5555))
+                print(Log)
+
+            elif msg['prevLogIndex'] >= len(Log):
                 print("index too long")
                 print(len(Log))
                 print(msg['prevLogIndex'])
@@ -167,6 +163,8 @@ def message_handler(msg, skt):
 
             elif Log[msg['prevLogIndex']]['Term'] != msg['prevLogTerm']:
                 print('Disagreement on terms')
+                print('Log: ' + str(Log))
+                print('msg: ' + str(msg))
                 reply = create_message('APPEND_REPLY')
                 reply['value'] = False
                 skt.sendto(json.dumps(reply).encode(), (current_leader, 5555))
@@ -180,32 +178,32 @@ def message_handler(msg, skt):
                 skt.sendto(json.dumps(reply).encode(), (current_leader, 5555))
 
             else:
-                # print('Everything looks fine')
                 if msg['Entries'][0] in Log:
                     return
                 elif msg['prevLogIndex'] + 1 >= len(Log):
                     print('Appending')
-                    print(Log)
                     Log.append(msg['Entries'][0])
                 else: 
                     print('Editing')
                     Log[msg['prevLogIndex']+1] = msg['Entries'][0]
                 lastApplied += 1
-                # print(msg)
                 print(Log)
-                # print(lastApplied)
                 reply = create_message('APPEND_REPLY')
                 reply['value'] = True
                 skt.sendto(json.dumps(reply).encode(), (current_leader, 5555))
 
             if msg['leaderCommit'] > commitIndex:
-                commitIndex = msg['leaderCommit']
+                commitIndex = min(msg['leaderCommit'], lastApplied)
             
     elif request == 'VOTE_REQUEST':
-        if currentTerm <= msg['term'] and not voted:
+        if len(Log) == 0:
+            last_term = -1
+        else:
+            last_term = Log[-1]['Term']
+        if currentTerm <= msg['term'] and (msg['lastLogTerm'] >= last_term or 
+        (msg['lastLogTerm'] == last_term and msg['lastLogIndex'] >= len(Log)-1)) and not voted:
             voted = True
             node = msg['candidateId']
-            # print("voting for " + node)
             vote_reply = create_message('VOTE_ACK')
             skt.sendto(json.dumps(vote_reply).encode(), (node, 5555))
             global votedFor
@@ -213,7 +211,6 @@ def message_handler(msg, skt):
 
     elif request == 'VOTE_ACK':
         global votes
-        # print(votes)
         votes += 1
 
     elif request == 'CONVERT_FOLLOWER':
@@ -259,7 +256,7 @@ def message_handler(msg, skt):
             matchIndex[node_num] += 1
             nextIndex[node_num] += 1
         else: 
-            if nextIndex[node_num] != 0:
+            if nextIndex[node_num] >= 0:
                 nextIndex[node_num] -= 1
         matcher = {}
         for i in matchIndex:
@@ -272,8 +269,7 @@ def message_handler(msg, skt):
         for ind in matcher:
             if matcher[ind] >= 2 and ind > commitIndex:
                 commitIndex = ind
-        # print("commit index: " + str(commitIndex))
-        # print('match index: ' + str(matchIndex))
+        print("commit index: " + str(commitIndex))
         print('next index: ' + str(nextIndex))
     else:
         print("UNSUPPORTED MESSAGE TYPE, PLEASE RECONSIDER")
@@ -285,33 +281,32 @@ def listener(skt):
     beat_time = time.perf_counter()
     print(f"Starting Listener ")
     while True:
-        data = {"currentTerm": currentTerm, "votedFor": votedFor, "Log": [], "Timeout": Timeout, 'Heartbeat': Heartbeat}
+        data = {"currentTerm": currentTerm, "votedFor": votedFor, "Log": [], "Timeout": Timeout, 
+        'Heartbeat': Heartbeat, 'commitIndex': commitIndex, 'log': Log, 'lastApplied': lastApplied}
         if kill:
             return
         try:
             msg, addr = skt.recvfrom(1024)
             # Decoding the Message received from leader
             decoded_msg = json.loads(msg.decode('utf-8'))
-            # print(f"Message Received : {decoded_msg} From : {addr}")
             threading.Thread(target=message_handler, args=[decoded_msg, skt]).start()
         except:
             # Timeout functionality if no messages received 
             if time.perf_counter() - beat_time > Timeout and state == 'follower':
-                # print('no messages recieved')
                 state = 'candidate'
                 threading.Thread(target=start_election, args=[skt]).start()
-            # print(f"ERROR while fetching from socket : {traceback.print_exc()}")
         data['currentTerm'] = currentTerm
         data['votedFor'] = votedFor
         with open(name+".txt", 'w') as f:
-            f.write(str(data))
+            f.write(json.dumps(data))
 
     print("Exiting Listener Function")
 
 def heartbeat(skt):
     print('I am the leader')
     while True:
-        data = {"currentTerm": currentTerm, "votedFor": votedFor, "Log": [], "Timeout": Timeout, 'Heartbeat': Heartbeat}
+        data = {"currentTerm": currentTerm, "votedFor": votedFor, "Log": [], "Timeout": Timeout, 
+        'Heartbeat': Heartbeat, 'commitIndex': commitIndex, 'log': Log, 'lastApplied': lastApplied}
         if kill:
             return
         if state == 'leader':
@@ -324,35 +319,29 @@ def heartbeat(skt):
                 else:
                     node_ind = nextIndex[node_num] - 1
                 if node != name and node_ind < lastApplied and lastApplied >= 0:
-                    # print(node)
-                    # print('next index: ' + str(nextIndex))
-                    # print('Sending')
-                    # print('last applied: ' + str(lastApplied))
-                    # print('node ind: ' + str(node_ind))
-                    # print(Log[node_ind])
                     app_rpc['prevLogIndex'] = node_ind
-                    app_rpc['prevLogTerm'] = currentTerm
+                    app_rpc['prevLogTerm'] = Log[node_ind]['Term']
                     app_rpc['Entries'].append(Log[node_ind+1])
                 if node != name:
                     try:
-                        # print(app_rpc)
                         skt.sendto(json.dumps(app_rpc).encode(), (node, 5555))
                     except:
-                        print(node + ' is down')
+                        a = 1
             with open(name+".txt", 'w') as f:
-                f.write(str(data))
-                    # print("sent to " + node)
+                f.write(json.dumps(data))
 
 if __name__ == "__main__":
     with open(name+".txt", 'r') as f:
         info = f.read()
-        # print(info)
-    # global Timeout
-    # global currentTerm
-    # global votedFor
-    # Timeout = info['Timeout']
-    # currentTerm = info['currentTerm']
-    # votedFor = info['votedFor']
+        print(info)
+    if info != '':
+        info = json.loads(info)
+        Timeout = info['Timeout']
+        currentTerm = info['currentTerm']
+        votedFor = info['votedFor']
+        commitIndex = info['commitIndex']
+        lastApplied = info['lastApplied']
+        Log = info['log']
     # Creating Socket and binding it to the target container IP and port
     UDP_Socket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
 

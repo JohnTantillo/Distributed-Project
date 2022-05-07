@@ -43,6 +43,10 @@ if __name__ == "__main__":
     msg3 = json.load(open("Message.json"))
     msg4 = json.load(open("Message.json"))
     msg5 = json.load(open("Message.json"))
+    sd = json.load(open("Message.json"))
+    rs = json.load(open("Message.json"))
+    to = json.load(open("Message.json"))
+
 
 
     # Initialize
@@ -71,6 +75,14 @@ if __name__ == "__main__":
     msg5['key'] = 'K4'
     msg5['value'] = 'message 4'
 
+    sd['sender_name'] = sender
+    sd['request'] = "SHUTDOWN"
+
+    rs['sender_name'] = sender
+    rs['request'] = "CONVERT_FOLLOWER"
+
+    to['sender_name'] = sender
+    to['request'] = "TIMEOUT"
 
     msg3['sender_name'] = sender
     msg3['request'] = "RETRIEVE"
@@ -94,10 +106,18 @@ if __name__ == "__main__":
         time.sleep(2)
         skt.sendto(json.dumps(msg2).encode('utf-8'), (leader, port))
         time.sleep(2)
-        skt.sendto(json.dumps(msg4).encode('utf-8'), (leader, port))
-        time.sleep(2)
+        temp = leader
+        skt.sendto(json.dumps(sd).encode('utf-8'), (leader, port))
+        skt.sendto(json.dumps(to).encode('utf-8'), ('Node5', port))
+        time.sleep(15)
+        skt.sendto(json.dumps(msg4).encode('utf-8'), ('Node1', port))
+        time.sleep(5)
         skt.sendto(json.dumps(msg5).encode('utf-8'), (leader, port))
-        time.sleep(2)
+        time.sleep(5)
+        skt.sendto(json.dumps(msg4).encode('utf-8'), (leader, port))
+        # time.sleep(5)
+        # skt.sendto(json.dumps(rs).encode('utf-8'), (temp, port))
+        time.sleep(5)
         skt.sendto(json.dumps(msg3).encode('utf-8'), (leader, port))
     except:
         #  socket.gaierror: [Errno -3] would be thrown if target IP container does not exist or exits, write your listener

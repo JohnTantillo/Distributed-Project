@@ -12,7 +12,7 @@ services:
      container_name: Node1
      build: Node/.
      volumes: 
-       - data-persist:/app
+       - data-persist:/app2
 
    node2:
      environment: 
@@ -20,7 +20,7 @@ services:
      container_name: Node2
      build: Node/.
      volumes: 
-       - data-persist-2:/app
+       - data-persist-2:/app2
 
    node3:
      environment: 
@@ -28,7 +28,7 @@ services:
      container_name: Node3
      build: Node/.
      volumes: 
-       - data-persist-3:/app
+       - data-persist-3:/app2
 
    node4:
      environment: 
@@ -36,7 +36,7 @@ services:
      container_name: Node4
      build: Node/.
      volumes: 
-       - data-persist-4:/app
+       - data-persist-4:/app2
 
    node5:
      environment: 
@@ -44,7 +44,7 @@ services:
      container_name: Node5
      build: Node/.
      volumes: 
-       - data-persist-5:/app
+       - data-persist-5:/app2
 
    #Do not change the part below
    controller:
